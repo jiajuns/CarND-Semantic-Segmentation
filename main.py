@@ -82,12 +82,20 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     :return: Tuple of (logits, train_op, cross_entropy_loss)
     """
     # TODO: Implement function
-    return None, None, None
+    logits = tf.reshape(nn_last_layer, (-1, num_classes))
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, correct_label))
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate,
+                                          decay=0.9,
+                                          momentum=0.0,
+                                          epsilon=1e-10)
+    train_step = optimizer.minimize(loss)
+    return logits, train_step, loss
+
 tests.test_optimize(optimize)
 
 
-def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_image,
-             correct_label, keep_prob, learning_rate):
+def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_placeholder,
+             label_placeholder, keep_prob, learning_rate):
     """
     Train neural network and print out the loss during training.
     :param sess: TF Session
@@ -102,11 +110,29 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     :param learning_rate: TF Placeholder for learning rate
     """
     # TODO: Implement function
-    pass
+    print_every = 10
+    keep_prob_placeholder = tf.placeholder(tf.float32, [1])
+    learning_rate_placeholder = tf.placeholder(tf.float32, [1])
+    iter_cnt = 0
+    for e in range(epochs):
+        losses = []
+        for train_data, train_label in get_batches_fn(batch_size):
+            feed_dict = {
+                input_placeholder: train_data,
+                label_placeholder: train_label,
+                keep_prob_placeholder: keep_prob,
+                learning_rate_placeholder: learning_rate
+            }
+            loss = sess.run([cross_entropy_loss], feed_dict)
+            losses.append(loss)
+
+            if (iter_cnt % print_every) == 0:
+                print("Iteration {0}: with minibatch training loss = {1:.3g}".format(iter_cnt, loss))
+        iter_cnt += 1
 tests.test_train_nn(train_nn)
 
 
-def run():
+def run(learning_rate, ):
     num_classes = 2
     image_shape = (160, 576)
     data_dir = './data'
@@ -130,11 +156,17 @@ def run():
         #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
 
         # TODO: Build NN using load_vgg, layers, and optimize function
+        label_placeholder = tf.placeholder(tf.float32, [None, None, None, num_classes])
+        input_image, keep_prob, layer3_out, layer4_out, layer7_out = load_vgg(sess, vgg_path)
+        output = layers(layer3_out, layer4_out, layer7_out, num_classes)
+        logits, optimizer, loss = optimize(output, label_placeholder, learning_rate, num_classes):
 
         # TODO: Train NN using the train_nn function
+        train_nn(sess, epochs, batch_size, get_batches_fn, optimizer, loss, input_placeholder,
+                 label_placeholder, keep_prob, learning_rate):
 
         # TODO: Save inference data using helper.save_inference_samples
-        #  helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
+        helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
 
         # OPTIONAL: Apply the trained model to a video
 
