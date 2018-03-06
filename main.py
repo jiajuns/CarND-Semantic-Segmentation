@@ -41,10 +41,7 @@ def load_vgg(sess, vgg_path):
     layer3_out = graph.get_tensor_by_name(vgg_layer3_out_tensor_name)
     layer4_out = graph.get_tensor_by_name(vgg_layer4_out_tensor_name)
     layer7_out = graph.get_tensor_by_name(vgg_layer7_out_tensor_name)
-
-
     return input_tensor, keep_prob, layer3_out, layer4_out, layer7_out
-tests.test_load_vgg(load_vgg, tf)
 
 
 def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
@@ -76,7 +73,6 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
                                         kernel_size=16, strides=(8, 8), padding='same')
     return output
 
-tests.test_layers(layers)
 
 
 def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
@@ -98,11 +94,10 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     train_step = optimizer.minimize(loss)
     return logits, train_step, loss
 
-tests.test_optimize(optimize)
 
 
 def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_placeholder,
-             label_placeholder, keep_prob, learning_rate):
+             label_placeholder, keep_prob):
     """
     Train neural network and print out the loss during training.
     :param sess: TF Session
@@ -117,9 +112,8 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     :param learning_rate: TF Placeholder for learning rate
     """
     # TODO: Implement function
-    print_every = 10
+    print_every = 5
     keep_prob_value = 0.7
-    learning_rate_value = 1e-5
     iter_cnt = 1
     for e in range(epochs):
         losses = []
@@ -128,23 +122,26 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
                 input_placeholder: train_data,
                 label_placeholder: train_label,
                 keep_prob: keep_prob_value,
-                learning_rate: learning_rate_value
             }
-            loss = sess.run([cross_entropy_loss], feed_dict)
+            loss, _ = sess.run([cross_entropy_loss, train_op], feed_dict)
             losses.append(loss)
 
             if (iter_cnt % print_every) == 0:
                 print("Iteration {0}: with minibatch training loss = {1:.3g}".format(iter_cnt, loss))
-        iter_cnt += 1
-tests.test_train_nn(train_nn)
+            iter_cnt += 1
 
-
-def run():
+def run(learning_rate, epochs, batch_size, debug=False):
     num_classes = 2
     image_shape = (160, 576)
     data_dir = './data'
     runs_dir = './runs'
     tests.test_for_kitti_dataset(data_dir)
+
+    if debug==True:
+        tests.test_load_vgg(load_vgg, tf)
+        tests.test_layers(layers)
+        tests.test_optimize(optimize)
+        tests.test_train_nn(train_nn)
 
     # Download pretrained vgg model
     helper.maybe_download_pretrained_vgg(data_dir)
@@ -168,9 +165,11 @@ def run():
         output = layers(layer3_out, layer4_out, layer7_out, num_classes)
         logits, optimizer, loss = optimize(output, label_placeholder, learning_rate, num_classes)
 
+        sess.run(tf.global_variables_initializer())
+
         # TODO: Train NN using the train_nn function
         train_nn(sess, epochs, batch_size, get_batches_fn, optimizer, loss, input_image,
-                 label_placeholder, keep_prob, learning_rate)
+                 label_placeholder, keep_prob)
 
         # TODO: Save inference data using helper.save_inference_samples
         helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
@@ -179,4 +178,4 @@ def run():
 
 
 if __name__ == '__main__':
-    run()
+    run(learning_rate=1e-3, epochs=6, batch_size=4, debug=False)
