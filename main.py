@@ -71,6 +71,9 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
 
     output = tf.layers.conv2d_transpose(inputs=de_conv2_added, filters=num_classes,
                                         kernel_size=16, strides=(8, 8), padding='same')
+
+    # TODO: implement scaling layers
+
     return output
 
 
@@ -97,7 +100,7 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
 
 
 def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_placeholder,
-             label_placeholder, keep_prob):
+             label_placeholder, keep_prob, keep_prob_value):
     """
     Train neural network and print out the loss during training.
     :param sess: TF Session
@@ -113,7 +116,6 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     """
     # TODO: Implement function
     print_every = 5
-    keep_prob_value = 0.7
     iter_cnt = 1
     for e in range(epochs):
         losses = []
@@ -125,12 +127,11 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
             }
             loss, _ = sess.run([cross_entropy_loss, train_op], feed_dict)
             losses.append(loss)
-
             if (iter_cnt % print_every) == 0:
                 print("Iteration {0}: with minibatch training loss = {1:.3g}".format(iter_cnt, loss))
             iter_cnt += 1
 
-def run(learning_rate, epochs, batch_size, debug=False):
+def run(learning_rate, epochs, batch_size, keep_prob_value, debug=False):
     num_classes = 2
     image_shape = (160, 576)
     data_dir = './data'
@@ -159,6 +160,7 @@ def run(learning_rate, epochs, batch_size, debug=False):
         # OPTIONAL: Augment Images for better results
         #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
 
+
         # TODO: Build NN using load_vgg, layers, and optimize function
         label_placeholder = tf.placeholder(tf.float32, [None, None, None, num_classes])
         input_image, keep_prob, layer3_out, layer4_out, layer7_out = load_vgg(sess, vgg_path)
@@ -169,7 +171,7 @@ def run(learning_rate, epochs, batch_size, debug=False):
 
         # TODO: Train NN using the train_nn function
         train_nn(sess, epochs, batch_size, get_batches_fn, optimizer, loss, input_image,
-                 label_placeholder, keep_prob)
+                 label_placeholder, keep_prob, keep_prob_value)
 
         # TODO: Save inference data using helper.save_inference_samples
         helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
@@ -178,4 +180,4 @@ def run(learning_rate, epochs, batch_size, debug=False):
 
 
 if __name__ == '__main__':
-    run(learning_rate=1e-3, epochs=6, batch_size=4, debug=False)
+    run(learning_rate=1e-3, epochs=6, batch_size=6, keep_prob_value=0.7, debug=False)
