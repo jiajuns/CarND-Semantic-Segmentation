@@ -1,10 +1,12 @@
 import os.path
+import numpy as np
 import tensorflow as tf
 import helper
 import warnings
 from distutils.version import LooseVersion
 import project_tests as tests
-
+import scipy.misc
+from glob import glob
 
 # Check TensorFlow Version
 assert LooseVersion(tf.__version__) >= LooseVersion('1.0'), 'Please use TensorFlow version 1.0 or newer.  You are using {}'.format(tf.__version__)
@@ -56,7 +58,7 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     # TODO: Implement function
     conv_1x1 = tf.layers.conv2d(inputs=vgg_layer7_out, filters=num_classes,
                                 kernel_size=1, strides=(1, 1), padding='same')
-    
+
     de_conv1 = tf.layers.conv2d_transpose(inputs=conv_1x1, filters=num_classes,
                                           kernel_size=4, strides=(2, 2), padding='same')
     vgg_layer4_out = tf.layers.conv2d(inputs=vgg_layer4_out, filters=num_classes,
@@ -99,8 +101,8 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
 
 
 
-def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_placeholder,
-             label_placeholder, keep_prob, keep_prob_value):
+def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, logits,
+             input_placeholder,label_placeholder, keep_prob, keep_prob_value, image_shape, num_classes):
     """
     Train neural network and print out the loss during training.
     :param sess: TF Session
@@ -117,8 +119,11 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     # TODO: Implement function
     print_every = 5
     iter_cnt = 1
+
+    saver = tf.train.Saver()
     for e in range(epochs):
         losses = []
+        best_accuracy = 0
         for train_data, train_label in get_batches_fn(batch_size):
             feed_dict = {
                 input_placeholder: train_data,
@@ -130,8 +135,30 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
             if (iter_cnt % print_every) == 0:
                 print("Iteration {0}: with minibatch training loss = {1:.3g}".format(iter_cnt, loss))
             iter_cnt += 1
+        accuracy = compute_accuracy(sess, input_placeholder, label_placeholder,
+                                    num_classes, logits, keep_prob, image_shape)
+        print('epoch {1} average accuracy {2:.3g}'.format(e, accuracy))
+        if accuracy > best_accuracy:
+            best_accuracy = accuracy
+            save_path = saver.save(sess, '/tmp/model.ckpt')
+            print('Model saved in path {}'.format(save_path))
 
-def run(learning_rate, epochs, batch_size, keep_prob_value, debug=False):
+def compute_accuracy(sess, input_placeholder, label_placeholder, num_classes, logits, keep_prob, image_shape, data_folder=None):
+    acc, _ = mean_iou(label_placeholder, tf.nn.softmax(logits), num_classes)
+    list_accuracy = []
+
+    # TODO: where to find validation dataset
+    for image_file in glob(os.path.join(data_folder, 'image_2', '*.png')):
+        image = scipy.misc.imresize(scipy.misc.imread(image_file), image_shape)
+        accuracy = sess.run([acc], {keep_prob: 1.0, input_placeholder: [image]})
+        list_accuracy.append(accuracy)
+    return np.mean(list_accuracy)
+
+def mean_iou(label_placeholder, prediction, num_classes):
+    iou, iou_op = tf.metrics.mean_iou(label_placeholder, prediction, num_classes)
+    return iou, iou_op
+
+def train(learning_rate, epochs, batch_size, keep_prob_value, debug=False):
     num_classes = 2
     image_shape = (160, 576)
     data_dir = './data'
@@ -170,14 +197,15 @@ def run(learning_rate, epochs, batch_size, keep_prob_value, debug=False):
         sess.run(tf.global_variables_initializer())
 
         # TODO: Train NN using the train_nn function
-        train_nn(sess, epochs, batch_size, get_batches_fn, optimizer, loss, input_image,
-                 label_placeholder, keep_prob, keep_prob_value)
+        train_nn(sess, epochs, batch_size, get_batches_fn, optimizer, loss, logits, input_image,
+                 label_placeholder, keep_prob, keep_prob_value, image_shape, num_classes)
 
         # TODO: Save inference data using helper.save_inference_samples
         helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
 
-        # OPTIONAL: Apply the trained model to a video
-
+def inference():
+    # OPTIONAL: Apply the trained model to a video
+    pass
 
 if __name__ == '__main__':
-    run(learning_rate=1e-3, epochs=6, batch_size=6, keep_prob_value=0.7, debug=False)
+    train(learning_rate=1e-3, epochs=6, batch_size=6, keep_prob_value=0.7, debug=False)
