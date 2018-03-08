@@ -1,4 +1,5 @@
 import os.path
+import re
 import numpy as np
 import tensorflow as tf
 import helper
@@ -101,8 +102,8 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
 
 
 
-def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, logits,
-             input_placeholder,label_placeholder, keep_prob, keep_prob_value, image_shape, num_classes):
+def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, iou, iou_op,
+             input_placeholder,label_placeholder, keep_prob, keep_prob_value, image_shape):
     """
     Train neural network and print out the loss during training.
     :param sess: TF Session
@@ -120,10 +121,11 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     print_every = 5
     iter_cnt = 1
 
-    saver = tf.train.Saver()
+    if (iou is not None) and (iou_op is not None):
+        best_accuracy = 0
+        saver = tf.train.Saver()
     for e in range(epochs):
         losses = []
-        best_accuracy = 0
         for train_data, train_label in get_batches_fn(batch_size):
             feed_dict = {
                 input_placeholder: train_data,
@@ -135,28 +137,38 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
             if (iter_cnt % print_every) == 0:
                 print("Iteration {0}: with minibatch training loss = {1:.3g}".format(iter_cnt, loss))
             iter_cnt += 1
-        accuracy = compute_accuracy(sess, input_placeholder, label_placeholder,
-                                    num_classes, logits, keep_prob, image_shape)
-        print('epoch {1} average accuracy {2:.3g}'.format(e, accuracy))
-        if accuracy > best_accuracy:
-            best_accuracy = accuracy
-            save_path = saver.save(sess, '/tmp/model.ckpt')
-            print('Model saved in path {}'.format(save_path))
+        
+        if (iou is not None) and (iou_op is not None):
+            ## validation
+            accuracy = compute_accuracy(sess, input_placeholder, label_placeholder, iou, iou_op, keep_prob, image_shape)
+            print('epoch {0} average accuracy {1}'.format(e, accuracy))
+            if accuracy > best_accuracy:
+                best_accuracy = accuracy
+                save_path = saver.save(sess, '/tmp/model.ckpt')
+                print('Model saved in path {}'.format(save_path))
 
-def compute_accuracy(sess, input_placeholder, label_placeholder, num_classes, logits, keep_prob, image_shape, data_folder=None):
-    acc, _ = mean_iou(label_placeholder, tf.nn.softmax(logits), num_classes)
+def compute_accuracy(sess, input_placeholder, label_placeholder, iou, iou_op, keep_prob, image_shape, data_folder='./data/data_road/valid'):
     list_accuracy = []
+    background_color = np.array([255, 0, 0])
+    image_paths = glob(os.path.join(data_folder, 'image_2', '*.png'))
+    label_paths = {
+        re.sub(r'_(lane|road)_', '_', os.path.basename(path)): path
+        for path in glob(os.path.join(data_folder, 'gt_image_2', '*_road_*.png'))}
+    
+    for image_file in image_paths:
+        gt_image_file = label_paths[os.path.basename(image_file)]
 
-    # TODO: where to find validation dataset
-    for image_file in glob(os.path.join(data_folder, 'image_2', '*.png')):
         image = scipy.misc.imresize(scipy.misc.imread(image_file), image_shape)
-        accuracy = sess.run([acc], {keep_prob: 1.0, input_placeholder: [image]})
-        list_accuracy.append(accuracy)
-    return np.mean(list_accuracy)
+        gt_image = scipy.misc.imresize(scipy.misc.imread(gt_image_file), image_shape)
 
-def mean_iou(label_placeholder, prediction, num_classes):
-    iou, iou_op = tf.metrics.mean_iou(label_placeholder, prediction, num_classes)
-    return iou, iou_op
+        gt_bg = np.all(gt_image == background_color, axis=2)
+        gt_bg = gt_bg.reshape(*gt_bg.shape, 1)
+        gt_image = np.concatenate((gt_bg, np.invert(gt_bg)), axis=2)
+
+        accuracy, _ = sess.run([iou, iou_op], {keep_prob:1.0, input_placeholder:np.array([image]), label_placeholder:np.array([gt_image])})
+        list_accuracy.append(accuracy)
+
+    return np.mean(list_accuracy)
 
 def train(learning_rate, epochs, batch_size, keep_prob_value, debug=False):
     num_classes = 2
@@ -193,12 +205,15 @@ def train(learning_rate, epochs, batch_size, keep_prob_value, debug=False):
         input_image, keep_prob, layer3_out, layer4_out, layer7_out = load_vgg(sess, vgg_path)
         output = layers(layer3_out, layer4_out, layer7_out, num_classes)
         logits, optimizer, loss = optimize(output, label_placeholder, learning_rate, num_classes)
-
+        prediction = tf.argmax(output, axis=3)
+        ground_truth = tf.argmax(label_placeholder, axis=3)
+        iou, iou_op = tf.metrics.mean_iou(ground_truth, prediction, num_classes)
         sess.run(tf.global_variables_initializer())
+        sess.run(tf.local_variables_initializer())
 
         # TODO: Train NN using the train_nn function
-        train_nn(sess, epochs, batch_size, get_batches_fn, optimizer, loss, logits, input_image,
-                 label_placeholder, keep_prob, keep_prob_value, image_shape, num_classes)
+        train_nn(sess, epochs, batch_size, get_batches_fn, optimizer, loss, iou, iou_op, input_image,
+                 label_placeholder, keep_prob, keep_prob_value, image_shape)
 
         # TODO: Save inference data using helper.save_inference_samples
         helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
@@ -208,4 +223,4 @@ def inference():
     pass
 
 if __name__ == '__main__':
-    train(learning_rate=1e-3, epochs=6, batch_size=6, keep_prob_value=0.7, debug=False)
+    train(learning_rate=5e-5, epochs=60, batch_size=4, keep_prob_value=0.6, debug=True)

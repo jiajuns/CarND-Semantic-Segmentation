@@ -137,8 +137,10 @@ def test_train_nn(train_nn):
             'input_placeholder': input_image,
             'label_placeholder': correct_label,
             'keep_prob': keep_prob,
-            'learning_rate': learning_rate,
-            'keep_prob_value': keep_prob_value}
+            'keep_prob_value': keep_prob_value,
+            'iou': None,
+            'iou_op': None,
+            'image_shape': (160, 576)}
         _prevent_print(train_nn, parameters)
 
 
