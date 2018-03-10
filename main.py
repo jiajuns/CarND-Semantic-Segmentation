@@ -57,25 +57,60 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     :return: The Tensor for the last layer of output
     """
     # TODO: Implement function
-    conv_1x1 = tf.layers.conv2d(inputs=vgg_layer7_out, filters=num_classes,
-                                kernel_size=1, strides=(1, 1), padding='same')
+    initializer = tf.contrib.layers.xavier_initializer_conv2d()
+    conv_1x1 = tf.layers.conv2d(inputs=vgg_layer7_out,
+                                filters=num_classes, 
+                                kernel_initializer=initializer,
+                                activation=tf.nn.leaky_relu,
+                                kernel_regularizer=tf.contrib.layers.l2_regularizer,
+                                kernel_size=1, 
+                                strides=(1, 1), 
+                                padding='same')
 
-    de_conv1 = tf.layers.conv2d_transpose(inputs=conv_1x1, filters=num_classes,
-                                          kernel_size=4, strides=(2, 2), padding='same')
-    vgg_layer4_out = tf.layers.conv2d(inputs=vgg_layer4_out, filters=num_classes,
-                                      kernel_size=1, strides=(1, 1), padding='same')
+    de_conv1 = tf.layers.conv2d_transpose(inputs=conv_1x1, 
+                                          filters=num_classes,
+                                          kernel_initializer=initializer,
+                                          activation=tf.nn.leaky_relu,
+                                          kernel_size=4, 
+                                          strides=(2, 2), 
+                                          padding='same')
+
+    vgg_layer4_out = tf.layers.conv2d(inputs=vgg_layer4_out, 
+                                      filters=num_classes,
+                                      kernel_initializer=initializer,
+                                      activation=tf.nn.leaky_relu,
+                                      kernel_size=1, 
+                                      strides=(1, 1), 
+                                      padding='same')
+
     de_conv1_added = tf.add(de_conv1, vgg_layer4_out)
 
-    vgg_layer3_out = tf.layers.conv2d(inputs=vgg_layer3_out, filters=num_classes,
-                                      kernel_size=1, strides=(1, 1), padding='same')
-    de_conv2 = tf.layers.conv2d_transpose(inputs=de_conv1_added, filters=num_classes,
-                                          kernel_size=4, strides=(2, 2), padding='same')
+    vgg_layer3_out = tf.layers.conv2d(inputs=vgg_layer3_out, 
+                                      filters=num_classes,
+                                      kernel_initializer=initializer,
+                                      activation=tf.nn.leaky_relu,
+                                      kernel_size=1, 
+                                      strides=(1, 1), 
+                                      padding='same')
+
+    de_conv2 = tf.layers.conv2d_transpose(inputs=de_conv1_added, 
+                                          filters=num_classes,
+                                          kernel_initializer=initializer,
+                                          activation=tf.nn.leaky_relu,
+                                          kernel_size=4, 
+                                          strides=(2, 2), 
+                                          padding='same')
+
     de_conv2_added = tf.add(de_conv2, vgg_layer3_out)
 
-    output = tf.layers.conv2d_transpose(inputs=de_conv2_added, filters=num_classes,
-                                        kernel_size=16, strides=(8, 8), padding='same')
+    output = tf.layers.conv2d_transpose(inputs=de_conv2_added, 
+                                        filters=num_classes,
+                                        kernel_initializer=initializer,
+                                        activation=tf.nn.leaky_relu,
+                                        kernel_size=16, 
+                                        strides=(8, 8), 
+                                        padding='same')
 
-    # TODO: implement scaling layers
 
     return output
 
@@ -223,4 +258,4 @@ def inference():
     pass
 
 if __name__ == '__main__':
-    train(learning_rate=5e-5, epochs=60, batch_size=4, keep_prob_value=0.6, debug=True)
+    train(learning_rate=1e-4, epochs=30, batch_size=4, keep_prob_value=0.6, debug=True)
